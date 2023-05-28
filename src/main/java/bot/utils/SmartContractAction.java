@@ -13,9 +13,13 @@ import org.web3j.abi.EventEncoder;
 import org.web3j.abi.FunctionEncoder;
 import org.web3j.abi.FunctionReturnDecoder;
 import org.web3j.abi.TypeReference;
+import org.web3j.abi.Utils;
 import org.web3j.abi.datatypes.Address;
+import org.web3j.abi.datatypes.DynamicArray;
+import org.web3j.abi.datatypes.Event;
 import org.web3j.abi.datatypes.Function;
 import org.web3j.abi.datatypes.Type;
+import org.web3j.abi.datatypes.generated.Int24;
 import org.web3j.abi.datatypes.generated.Uint24;
 import org.web3j.abi.datatypes.generated.Uint256;
 import org.web3j.crypto.Credentials;
@@ -78,33 +82,38 @@ public class SmartContractAction {
     
     public void getLPList(Web3j web3j) throws IOException {
     	// Event signature for PoolCreated event in Uniswap v3
-    	String eventSignature = EventEncoder.buildEventSignature("PoolCreated(address,address,uint24,int24,address)");
-
+    	List<TypeReference<?>> parameters = new ArrayList<TypeReference<?>>();
+    	parameters.add(new TypeReference<Address>() {}); // token 0
+    	parameters.add(new TypeReference<Address>() {}); // token 1
+    	parameters.add(new TypeReference<Uint24>() {}); // fee
+    	parameters.add(new TypeReference<Int24>() {}); // tickSpacing
+    	parameters.add(new TypeReference<Address>() {}); // pool
+    	Event event = new Event("PoolCreated", parameters);
+    	
         // Create the EthFilter
         EthFilter filter = new EthFilter(
         		new DefaultBlockParameterNumber(BigInteger.valueOf(95177616)),
                 DefaultBlockParameterName.LATEST,
                 DEXConstant.UNISWAP_V3_FACTORY
         );
-        filter.addSingleTopic(eventSignature);
+        filter.addSingleTopic(EventEncoder.encode(event));
 
         EthLog ethLog = web3j.ethGetLogs(filter).send();
 
         List<LogResult> logResults = ethLog.getLogs();
-        System.out.println(logResults.size());
         for (LogResult logResult : logResults) {
             if (logResult instanceof EthLog.LogObject) {
             	LPModel lpModel = new LPModel();
                 EthLog.LogObject logObject = (EthLog.LogObject) logResult;
                 // Process the log object
-                extractLiquidityPoolAddresses(logObject.get(), lpModel);
-                getPoolAddress(web3j, lpModel);
+                setPoolCreatedInfo(logObject.get(), lpModel);
                 System.out.println(lpModel);
             }
         }
     }
     
-    private LPModel extractLiquidityPoolAddresses(Log log, LPModel lpModel) {
+    private void setPoolCreatedInfo(Log log, LPModel lpModel) {
+    	// IndexedParameters
         // Extract the addresses of the token pair from the event log
         String tokenAAddressInHex = log.getTopics().get(1);
         String tokenBAddressInHex = log.getTopics().get(2);
@@ -116,9 +125,24 @@ public class SmartContractAction {
         lpModel.setToken0(token0);
         lpModel.setToken1(token1);
         lpModel.setFee(fee);
-        return lpModel;
+        
+        // NonIndexedParameters
+        List<TypeReference<?>> parameters = new ArrayList<TypeReference<?>>();
+    	parameters.add(new TypeReference<Int24>() {}); // tickSpacing
+    	parameters.add(new TypeReference<Address>() {}); // pool
+    	List<Type> decodedData = FunctionReturnDecoder.decode(log.getData(), Utils.convert(parameters));
+
+    	Int24 tickSpacing = (Int24) decodedData.get(0); // tickSpacing
+    	Address pool = (Address) decodedData.get(1); // pool
+    	lpModel.setTickSpacing(tickSpacing);
+    	lpModel.setPoolAddress(pool);
     }
     
+    private void getTokenAmountInLP() {
+    	
+    }
+    
+    // SAMPLE ONLY
     private LPModel getPoolAddress(Web3j web3j, LPModel lpModel) throws IOException {
         List<Type> inputs = new ArrayList<Type>();
         List<TypeReference<?>> outputs = new ArrayList<TypeReference<?>>();
@@ -144,9 +168,5 @@ public class SmartContractAction {
         }
         
         return lpModel;
-    }
-    
-    private void getTokenAmountInLP() {
-    	
     }
 }
