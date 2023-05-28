@@ -15,8 +15,8 @@ import org.apache.logging.log4j.Logger;
 
 import bot.constant.MiscConstant;
 
-public class ApiAction {
-	private static final Logger logger = LogManager.getLogger(ApiAction.class);
+public class BlockchainAction {
+	private static final Logger logger = LogManager.getLogger(BlockchainAction.class);
 
     public int readLastBlockNo() throws IOException {
         int lastBlockNo = 0;
